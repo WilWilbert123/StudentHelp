@@ -175,7 +175,7 @@ export async function POST(request: Request) {
           await sleep(2000);
         }
 
-        // Use a stronger prompt that emphasizes NO markdown formatting
+        // Updated prompt with better Socratic question instructions
         const response = await fetch(
           `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`,
           {
@@ -195,12 +195,36 @@ RULES:
 - Escape any double quotes inside string values as \\".
 
 Required JSON structure:
-{"subject":"Math","language":"English","extractedText":"text here","solution":{"directAnswer":"answer","steps":[{"title":"Step 1","description":"brief","explanation":"detailed"}],"socraticQuestion":{"question":"MCQ?","options":["A","B","C","D"],"correctAnswer":0}}}
+{
+  "subject": "Math",
+  "language": "English",
+  "extractedText": "text here",
+  "solution": {
+    "directAnswer": "answer",
+    "steps": [
+      {"title": "Step 1", "description": "brief", "explanation": "detailed"}
+    ],
+    "socraticQuestion": {
+      "question": "What is the total amount?",
+      "options": ["A", "B", "C", "D"],
+      "correctAnswer": 0,
+      "explanation": "Step-by-step explanation of the correct answer"
+    }
+  }
+}
 
-Subject must be: Math, Science, English, Filipino, Aralin Panlipunan, or General.
-Language must be: English, Tagalog, or Taglish.
-Provide 3-4 steps.
-correctAnswer is 0-based index of the correct option.`
+IMPORTANT INSTRUCTIONS:
+1. Subject must be: Math, Science, English, Filipino, Aralin Panlipunan, or General.
+2. Language must be: English, Tagalog, or Taglish.
+3. Provide 3-4 steps.
+4. correctAnswer is 0-based index of the correct option.
+
+🔴 CRITICAL: The Socratic Question MUST test the SAME problem as the direct answer, but with slightly different numbers or a different angle to check understanding. For example:
+- If directAnswer is "85 cents" from "3 twenty-cent coins + 5 five-cent coins"
+- Then socraticQuestion should ask: "What is the total if you had 4 twenty-cent coins instead of 3, but still 5 five-cent coins?"
+- The correctAnswer should reflect the new calculation (105 cents)
+
+⚠️ The Socratic question should NEVER have a different answer from the direct answer UNLESS it's testing a variation of the SAME concept. The question should clearly relate to the original problem.`
                     },
                     {
                       inline_data: {
@@ -255,6 +279,39 @@ correctAnswer is 0-based index of the correct option.`
           throw new Error('Response missing required fields');
         }
 
+        // Validate Socratic question structure
+        if (result.solution.socraticQuestion) {
+          const sq = result.solution.socraticQuestion;
+          if (!sq.question || !sq.options || !Array.isArray(sq.options) || sq.options.length < 2) {
+            console.warn('[Analyze] Invalid Socratic question structure, using fallback');
+            // Provide a fallback Socratic question based on the direct answer
+            result.solution.socraticQuestion = {
+              question: "Based on the solution above, which answer is correct?",
+              options: [
+                result.solution.directAnswer,
+                "Alternative answer 1",
+                "Alternative answer 2",
+                "Alternative answer 3"
+              ],
+              correctAnswer: 0,
+              explanation: `The correct answer is ${result.solution.directAnswer}.`
+            };
+          }
+        } else {
+          // Provide a fallback Socratic question
+          result.solution.socraticQuestion = {
+            question: "Based on the solution above, which answer is correct?",
+            options: [
+              result.solution.directAnswer,
+              "Alternative answer 1",
+              "Alternative answer 2",
+              "Alternative answer 3"
+            ],
+            correctAnswer: 0,
+            explanation: `The correct answer is ${result.solution.directAnswer}.`
+          };
+        }
+
         return NextResponse.json(result);
       } catch (err: any) {
         lastError = err.message;
@@ -275,4 +332,3 @@ correctAnswer is 0-based index of the correct option.`
     );
   }
 }
-
