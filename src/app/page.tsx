@@ -3,21 +3,39 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import Header from '@/components/header/Header';
-import PhotoUploader from '@/components/upload/PhotoUploader';
+import HomeworkAssistant from '@/components/upload/PhotoUploader';
 import SolutionViewer from '@/components/solution/SolutionViewer';
 import HistoryDrawer from '@/components/history/HistoryDrawer';
-import { AnalysisResponse, HomeworkSubmission } from '@/types/homework';
+import { AnalysisResponse, HomeworkChatContext, HomeworkSubmission } from '@/types/homework';
 import { addSubmissionToHistory } from '@/lib/utils';
 
 export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [submission, setSubmission] = useState<HomeworkSubmission | null>(null);
+  const [studyTip, setStudyTip] = useState<string | null>(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const homeworkContext: HomeworkChatContext | null = submission
+    ? {
+        extractedText: submission.extractedText,
+        subject: submission.subject,
+        finalAnswer: submission.solution.directAnswer,
+        studyTip,
+        stepsSummary: submission.solution.steps
+          .map((step, index) => `${index + 1}. ${step.explanation}`)
+          .join(' '),
+      }
+    : uploadedImageUrl
+      ? {}
+      : null;
+
   const handleUploadComplete = async (imageUrl: string) => {
+    setUploadedImageUrl(imageUrl);
     setIsProcessing(true);
     setError(null);
+    setStudyTip(null);
 
     try {
       const response = await fetch('/api/analyze-homework', {
@@ -33,6 +51,12 @@ export default function Home() {
 
       const data: AnalysisResponse = await response.json();
 
+      if (!data.canSolve || !data.solution) {
+        setSubmission(null);
+        setError(data.userMessage || 'Unable to analyze this homework image. Please try again.');
+        return;
+      }
+
       const newSubmission: HomeworkSubmission = {
         id: Date.now().toString(),
         imageUrl,
@@ -45,6 +69,11 @@ export default function Home() {
 
       setSubmission(newSubmission);
       addSubmissionToHistory(newSubmission);
+      setStudyTip(data.studyTip ?? null);
+
+      if (data.status === 'SOLVED_PARTIAL') {
+        setError(data.userMessage);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
       console.error('Analysis error:', err);
@@ -67,12 +96,18 @@ export default function Home() {
         >
           {/* Upload Section */}
           <section>
-            <PhotoUploader
+            <HomeworkAssistant
               onUploadComplete={handleUploadComplete}
               isProcessing={isProcessing}
+              imageUrl={uploadedImageUrl}
+              homeworkContext={homeworkContext}
             />
             {error && (
-              <div className="mt-4 p-4 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 text-sm">
+              <div className={`mt-4 p-4 rounded-xl border text-sm ${
+                submission
+                  ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300'
+                  : 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300'
+              }`}>
                 {error}
               </div>
             )}
@@ -88,6 +123,7 @@ export default function Home() {
                 solution={submission.solution}
                 imageUrl={submission.imageUrl}
                 extractedText={submission.extractedText}
+                studyTip={studyTip}
               />
             </motion.section>
           )}
@@ -97,7 +133,12 @@ export default function Home() {
       <HistoryDrawer
         isOpen={isHistoryOpen}
         onClose={() => setIsHistoryOpen(false)}
-        onSelect={(submission) => setSubmission(submission)}
+        onSelect={(selectedSubmission) => {
+          setSubmission(selectedSubmission);
+          setUploadedImageUrl(selectedSubmission.imageUrl);
+          setStudyTip(null);
+          setError(null);
+        }}
       />
     </div>
   );

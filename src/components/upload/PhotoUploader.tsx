@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from 'next-themes';
+import { HomeworkChatContext } from '@/types/homework';
 
 // =============== PHOTO UPLOADER COMPONENT ===============
 interface PhotoUploaderProps {
@@ -357,22 +358,37 @@ interface Message {
 
 interface AIAssistantProps {
   className?: string;
+  imageUrl?: string | null;
+  homeworkContext?: HomeworkChatContext | null;
+  isAnalyzing?: boolean;
 }
 
-export function AIAssistant({ className }: AIAssistantProps) {
+const INITIAL_GREETING =
+  "👋 Hello! I'm your AI homework assistant. Upload a homework image on the left, then ask me anything about it — I'll explain steps, clarify concepts, and help you learn.";
+
+const CONNECTED_GREETING =
+  "📎 I'm connected to your uploaded homework image. Ask me about any step, concept, or part of the problem you don't understand!";
+
+export function AIAssistant({
+  className,
+  imageUrl = null,
+  homeworkContext = null,
+  isAnalyzing = false,
+}: AIAssistantProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
       type: 'assistant',
-      content: '👋 Hello! I\'m your AI homework assistant. Ask me anything about your assignments, and I\'ll help you understand and solve problems step by step!',
-      timestamp: new Date()
-    }
+      content: INITIAL_GREETING,
+      timestamp: new Date(),
+    },
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const analysisNoticeShownRef = useRef(false);
   const { theme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
@@ -388,86 +404,121 @@ export function AIAssistant({ className }: AIAssistantProps) {
     scrollToBottom();
   }, [messages]);
 
-  // AI Response Generator - Simulates intelligent responses
-  const generateAIResponse = async (userMessage: string): Promise<string> => {
-    const lowerMsg = userMessage.toLowerCase();
-    
-    // Simulate AI thinking delay
-    await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 400));
+  useEffect(() => {
+    if (!imageUrl) return;
 
-    // Intelligent response system
-    const responses = {
-      math: [
-        "Great math question! Let's break this down step by step:\n\n1. First, identify what we know\n2. Apply the appropriate formula\n3. Solve systematically\n\nI can help you work through this!",
-        "For this math problem, remember to:\n• Show your work clearly\n• Check your calculations\n• Verify your answer makes sense\n\nWould you like me to guide you through it?"
-      ],
-      science: [
-        "This is a fascinating science topic! Let's think about it scientifically:\n\n• What do we observe?\n• What are the key principles?\n• How can we test our hypothesis?\n\nI'm here to help you understand the concepts!",
-        "For scientific problems, it's important to:\n• Understand the fundamentals\n• Apply the scientific method\n• Draw logical conclusions\n\nLet's explore this together!"
-      ],
-      essay: [
-        "For writing essays, consider this structure:\n\n📝 Introduction: Hook your reader\n📝 Body: Develop your arguments\n📝 Conclusion: Wrap up effectively\n\nI can help you brainstorm ideas!",
-        "Great essay topic! Here are some tips:\n• Create a strong thesis\n• Use evidence and examples\n• Write clear topic sentences\n\nWhat would you like to focus on?"
-      ],
-      help: [
-        "I'm here to help! Let me know:\n• What subject you're working on\n• What you understand so far\n• Where you're stuck\n\nI'll provide clear explanations and examples!"
-      ],
-      default: [
-        "That's an interesting question! Let me think about that...\n\nHere's what I can do to help:\n• Explain concepts clearly\n• Provide examples\n• Break down complex problems\n\nFeel free to ask for more details!",
-        "Great question! To help you best, I'll:\n• Analyze your question carefully\n• Provide relevant information\n• Offer clear explanations\n\nWhat specific aspect would you like to explore?"
-      ]
-    };
+    analysisNoticeShownRef.current = false;
+    setMessages([
+      {
+        id: Date.now().toString(),
+        type: 'assistant',
+        content: isAnalyzing
+          ? '📷 Homework image received! I am analyzing it now — feel free to ask questions once analysis finishes, or ask about what you see in the image.'
+          : homeworkContext?.extractedText
+            ? `${CONNECTED_GREETING}\n\nProblem detected: "${homeworkContext.extractedText.slice(0, 120)}${homeworkContext.extractedText.length > 120 ? '...' : ''}"`
+            : CONNECTED_GREETING,
+        timestamp: new Date(),
+      },
+    ]);
+  }, [imageUrl]);
 
-    // Pattern matching for intelligent responses
-    if (lowerMsg.includes('math') || lowerMsg.includes('equation') || lowerMsg.includes('solve') || lowerMsg.includes('calculate')) {
-      return responses.math[Math.floor(Math.random() * responses.math.length)];
-    } else if (lowerMsg.includes('science') || lowerMsg.includes('physics') || lowerMsg.includes('chemistry') || lowerMsg.includes('biology')) {
-      return responses.science[Math.floor(Math.random() * responses.science.length)];
-    } else if (lowerMsg.includes('essay') || lowerMsg.includes('write') || lowerMsg.includes('paper') || lowerMsg.includes('paragraph')) {
-      return responses.essay[Math.floor(Math.random() * responses.essay.length)];
-    } else if (lowerMsg.includes('help') || lowerMsg.includes('assist') || lowerMsg.includes('please') || lowerMsg.includes('thanks')) {
-      return responses.help[Math.floor(Math.random() * responses.help.length)];
-    } else {
-      return responses.default[Math.floor(Math.random() * responses.default.length)];
+  useEffect(() => {
+    if (!imageUrl || isAnalyzing || !homeworkContext?.extractedText || analysisNoticeShownRef.current) {
+      return;
     }
+
+    analysisNoticeShownRef.current = true;
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: (Date.now() + 1).toString(),
+        type: 'assistant',
+        content: `✅ Analysis complete! I can now help with the full solution. Final answer: ${homeworkContext.finalAnswer ?? 'see solution below'}.`,
+        timestamp: new Date(),
+      },
+    ]);
+  }, [homeworkContext, imageUrl, isAnalyzing]);
+
+  const sendMessageToAssistant = async (userMessage: string): Promise<string> => {
+    const history = messages
+      .filter((message) => message.id !== '1')
+      .map((message) => ({
+        role: message.type === 'user' ? ('user' as const) : ('assistant' as const),
+        content: message.content,
+      }));
+
+    const response = await fetch('/api/chat-homework', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        imageUrl,
+        message: userMessage,
+        history,
+        context: homeworkContext,
+      }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to get a response from the AI assistant');
+    }
+
+    return data.reply;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
+    if (!imageUrl) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          type: 'assistant',
+          content: 'Please upload your homework image first so I can see the problem and help you accurately.',
+          timestamp: new Date(),
+        },
+      ]);
+      return;
+    }
+
     const userMessage: Message = {
       id: Date.now().toString(),
       type: 'user',
       content: input.trim(),
-      timestamp: new Date()
+      timestamp: new Date(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
     setIsTyping(true);
 
     try {
-      const response = await generateAIResponse(userMessage.content);
-      
+      const response = await sendMessageToAssistant(userMessage.content);
+
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: 'assistant',
         content: response,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
 
-      setMessages(prev => [...prev, assistantMessage]);
+      setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
       console.error('AI Error:', error);
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: 'assistant',
-        content: 'I encountered an issue processing your question. Could you please rephrase it? I\'m here to help!',
-        timestamp: new Date()
+        content:
+          error instanceof Error
+            ? error.message
+            : "I encountered an issue processing your question. Could you please rephrase it?",
+        timestamp: new Date(),
       };
-      setMessages(prev => [...prev, errorMessage]);
+      setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
       setIsTyping(false);
@@ -475,12 +526,16 @@ export function AIAssistant({ className }: AIAssistantProps) {
   };
 
   const clearChat = () => {
-    setMessages([{
-      id: '1',
-      type: 'assistant',
-      content: '👋 Chat cleared! How can I help you with your homework today?',
-      timestamp: new Date()
-    }]);
+    setMessages([
+      {
+        id: Date.now().toString(),
+        type: 'assistant',
+        content: imageUrl
+          ? `${CONNECTED_GREETING}\n\nYour homework image is still connected.`
+          : '👋 Chat cleared! Upload a homework image, then ask me anything about it.',
+        timestamp: new Date(),
+      },
+    ]);
   };
 
   // Prevent hydration mismatch
@@ -534,7 +589,11 @@ export function AIAssistant({ className }: AIAssistantProps) {
                 "text-xs",
                 isDark ? "text-gray-400" : "text-gray-500"
               )}>
-                Powered by Advanced AI
+                {imageUrl
+                  ? isAnalyzing
+                    ? 'Connected to image • Analyzing...'
+                    : 'Connected to your uploaded homework'
+                  : 'Upload homework to connect'}
               </p>
             </div>
           </div>
@@ -663,7 +722,11 @@ export function AIAssistant({ className }: AIAssistantProps) {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask me anything about your homework..."
+              placeholder={
+                imageUrl
+                  ? 'Ask about your uploaded homework...'
+                  : 'Upload homework first, then ask a question...'
+              }
               className={cn(
                 "w-full px-4 py-2.5 pr-10 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-amber-700/50 transition-all",
                 isDark 
@@ -718,26 +781,33 @@ export function AIAssistant({ className }: AIAssistantProps) {
 interface HomeworkAssistantProps {
   onUploadComplete?: (imageUrl: string) => void;
   isProcessing?: boolean;
+  imageUrl?: string | null;
+  homeworkContext?: HomeworkChatContext | null;
 }
 
-export default function HomeworkAssistant({ 
+export default function HomeworkAssistant({
   onUploadComplete = () => {},
-  isProcessing = false 
+  isProcessing = false,
+  imageUrl = null,
+  homeworkContext = null,
 }: HomeworkAssistantProps) {
   return (
     <div className="w-full max-w-7xl mx-auto p-4">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left Side - Photo Uploader */}
         <div className="lg:col-span-1">
-          <PhotoUploader 
-            onUploadComplete={onUploadComplete} 
-            isProcessing={isProcessing} 
+          <PhotoUploader
+            onUploadComplete={onUploadComplete}
+            isProcessing={isProcessing}
           />
         </div>
-        
-        {/* Right Side - AI Assistant with Theme Support */}
+
         <div className="lg:col-span-1">
-          <AIAssistant className="h-[600px]" />
+          <AIAssistant
+            className="h-[600px]"
+            imageUrl={imageUrl}
+            homeworkContext={homeworkContext}
+            isAnalyzing={isProcessing}
+          />
         </div>
       </div>
     </div>

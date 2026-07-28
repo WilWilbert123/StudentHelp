@@ -23,9 +23,10 @@ interface SolutionViewerProps {
   solution: Solution;
   imageUrl: string;
   extractedText: string;
+  studyTip?: string | null;
 }
 
-export default function SolutionViewer({ solution, imageUrl, extractedText }: SolutionViewerProps) {
+export default function SolutionViewer({ solution, imageUrl, extractedText, studyTip }: SolutionViewerProps) {
   const [showAnswer, setShowAnswer] = useState(false);
   const [copied, setCopied] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
@@ -236,6 +237,19 @@ export default function SolutionViewer({ solution, imageUrl, extractedText }: So
           >
             <SocraticCheck question={solution.socraticQuestion} />
           </motion.div>
+
+          {studyTip && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.25 }}
+              className="border border-primary/20 rounded-2xl p-5 bg-primary/5"
+            >
+              <p className="text-sm text-foreground/90">
+                <span className="font-semibold text-primary">Study tip:</span> {studyTip}
+              </p>
+            </motion.div>
+          )}
         </div>
       </div>
     </div>
