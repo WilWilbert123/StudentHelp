@@ -27,6 +27,8 @@ export interface SocraticQuestion {
   options: string[];
   correctAnswer: number;
   explanation?: string;
+  optionExplanations?: string[];
+  hint?: string;
 }
 
 export interface HomeworkChatContext {
