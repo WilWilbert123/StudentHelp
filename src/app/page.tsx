@@ -6,6 +6,7 @@ import Header from '@/components/header/Header';
 import HomeworkAssistant from '@/components/upload/PhotoUploader';
 import SolutionViewer from '@/components/solution/SolutionViewer';
 import HistoryDrawer from '@/components/history/HistoryDrawer';
+import Footer from '@/components/footer/Footer';
 import { AnalysisResponse, HomeworkChatContext, HomeworkSubmission } from '@/types/homework';
 import { addSubmissionToHistory } from '@/lib/utils';
 
@@ -140,6 +141,8 @@ export default function Home() {
           setError(null);
         }}
       />
+
+      <Footer />
     </div>
   );
 }

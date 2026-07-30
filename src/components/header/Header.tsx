@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useTheme } from 'next-themes';
-import { Sun, Moon, Pencil, History, BookOpen } from 'lucide-react';
+import { Sun, Moon, Pencil, History, BookOpen, Eye, Loader2 } from 'lucide-react';
 import { getUserName } from '@/lib/utils';
 import NameModal from './NameModal';
 
@@ -14,6 +14,7 @@ export default function Header({ onHistoryToggle }: HeaderProps) {
   const [name, setName] = useState('');
   const [isNameModalOpen, setIsNameModalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [viewsCount, setViewsCount] = useState<number | null>(null);
   const { theme, setTheme } = useTheme();
 
   useEffect(() => {
@@ -24,6 +25,28 @@ export default function Header({ onHistoryToggle }: HeaderProps) {
     } else {
       setName(savedName);
     }
+
+    // Real-Time Visitor Count Fetching
+    const fetchRealTimeVisitors = async () => {
+      try {
+        const isNewSession = !sessionStorage.getItem('visited_session');
+        if (isNewSession) {
+          sessionStorage.setItem('visited_session', 'true');
+        }
+
+        const res = await fetch(`/api/counter?inc=${isNewSession ? 'true' : 'false'}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (typeof data.count === 'number') {
+            setViewsCount(data.count);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch real-time visitor count:', err);
+      }
+    };
+
+    fetchRealTimeVisitors();
   }, []);
 
   const handleNameUpdate = (newName: string) => {
@@ -31,7 +54,7 @@ export default function Header({ onHistoryToggle }: HeaderProps) {
     setIsNameModalOpen(false);
   };
 
-  // Prevent SSR hydrations mismatches for theme icons
+  // Prevent SSR hydration mismatches
   if (!mounted) {
     return (
       <header className="sticky top-0 z-40 w-full border-b border-border/50 bg-background/80 backdrop-blur-md px-4 py-3 h-[65px]" />
@@ -72,8 +95,22 @@ export default function Header({ onHistoryToggle }: HeaderProps) {
               </div>
             </div>
 
-            {/* Right: Actions */}
-            <div className="flex items-center gap-1 shrink-0">
+            {/* Right: Actions & Real-Time Visitor Counter */}
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Real-Time Visit Counter Badge */}
+              <div 
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary/80 border border-border/80 text-xs font-medium text-foreground shadow-sm transition-all hover:bg-secondary"
+                title="Real-time global visitor count"
+              >
+                <Eye className="w-3.5 h-3.5 text-primary shrink-0 animate-pulse" />
+                {viewsCount !== null ? (
+                  <span className="font-bold font-mono text-xs">{viewsCount.toLocaleString()}</span>
+                ) : (
+                  <Loader2 className="w-3 h-3 text-muted-foreground animate-spin" />
+                )}
+                <span className="hidden sm:inline text-[10px] text-muted-foreground">views</span>
+              </div>
+
               <button
                 type="button"
                 onClick={onHistoryToggle}
@@ -105,4 +142,3 @@ export default function Header({ onHistoryToggle }: HeaderProps) {
     </>
   );
 }
-

@@ -14,7 +14,9 @@ import {
   Bot,
   Sparkles,
   MessageSquare,
-  X
+  X,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from 'next-themes';
@@ -363,6 +365,72 @@ interface AIAssistantProps {
   isAnalyzing?: boolean;
 }
 
+// =============== CHAT MESSAGE CONTENT WITH COLLAPSIBLE SPOILER ANSWER ===============
+function ChatMessageContent({ content, isDark }: { content: string; isDark: boolean }) {
+  const [showAnswer, setShowAnswer] = useState(false);
+
+  // Check if content contains "Final answer:"
+  const finalAnswerIndex = content.indexOf('Final answer:');
+
+  if (finalAnswerIndex !== -1) {
+    const prefixText = content.slice(0, finalAnswerIndex).trim();
+    const answerText = content.slice(finalAnswerIndex + 'Final answer:'.length).trim();
+
+    return (
+      <div className="space-y-2">
+        {prefixText && (
+          <p className="text-sm whitespace-pre-wrap leading-relaxed">
+            {prefixText}
+          </p>
+        )}
+
+        <div className="pt-1">
+          <button
+            type="button"
+            onClick={() => setShowAnswer(!showAnswer)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border shadow-sm cursor-pointer",
+              showAnswer
+                ? "bg-amber-500/20 text-amber-900 dark:text-amber-300 border-amber-500/40"
+                : "bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/20"
+            )}
+          >
+            {showAnswer ? <EyeOff className="w-3.5 h-3.5 text-amber-600" /> : <Eye className="w-3.5 h-3.5 text-amber-600" />}
+            <span>{showAnswer ? 'Hide Answer' : 'Show Answer'}</span>
+          </button>
+        </div>
+
+        <AnimatePresence>
+          {showAnswer && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden"
+            >
+              <div className={cn(
+                "p-3 rounded-xl border text-xs sm:text-sm font-medium mt-1.5 leading-relaxed",
+                isDark 
+                  ? "bg-gray-800/90 border-gray-600 text-amber-300" 
+                  : "bg-amber-50/80 border-amber-200 text-amber-900"
+              )}>
+                <span className="font-bold">Final Answer: </span>
+                <span>{answerText}</span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  }
+
+  return (
+    <p className="text-sm whitespace-pre-wrap leading-relaxed">
+      {content}
+    </p>
+  );
+}
+
 const INITIAL_GREETING =
   "👋 Hello! I'm your AI homework assistant. Upload a homework image on the left, then ask me anything about it — I'll explain steps, clarify concepts, and help you learn.";
 
@@ -386,7 +454,7 @@ export function AIAssistant({
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const analysisNoticeShownRef = useRef(false);
   const { theme } = useTheme();
@@ -397,7 +465,12 @@ export function AIAssistant({
   }, []);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
   };
 
   useEffect(() => {
@@ -618,10 +691,13 @@ export function AIAssistant({
       </div>
 
       {/* Messages Area */}
-      <div className={cn(
-        "flex-1 overflow-y-auto p-4 space-y-3",
-        isDark ? "bg-gray-800" : "bg-gray-50"
-      )}>
+      <div 
+        ref={chatContainerRef}
+        className={cn(
+          "flex-1 overflow-y-auto p-4 space-y-3",
+          isDark ? "bg-gray-800" : "bg-gray-50"
+        )}
+      >
         <AnimatePresence initial={false}>
           {messages.map((message) => (
             <motion.div
@@ -657,9 +733,7 @@ export function AIAssistant({
                     ? "bg-gray-700 border border-gray-600 text-gray-200 rounded-tl-sm"
                     : "bg-white border border-gray-200 text-gray-800 rounded-tl-sm"
               )}>
-                <p className="text-sm whitespace-pre-wrap leading-relaxed">
-                  {message.content}
-                </p>
+                <ChatMessageContent content={message.content} isDark={isDark} />
                 <p className={cn(
                   "text-[10px] mt-1",
                   message.type === 'user' 
@@ -707,7 +781,6 @@ export function AIAssistant({
             </motion.div>
           )}
         </AnimatePresence>
-        <div ref={messagesEndRef} />
       </div>
 
       {/* Input Area */}
