@@ -108,7 +108,7 @@ export default function Header({ onHistoryToggle }: HeaderProps) {
                 ) : (
                   <Loader2 className="w-3 h-3 text-muted-foreground animate-spin" />
                 )}
-                <span className="hidden sm:inline text-[10px] text-muted-foreground">views</span>
+                
               </div>
 
               <button
