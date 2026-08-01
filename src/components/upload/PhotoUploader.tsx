@@ -16,7 +16,8 @@ import {
   MessageSquare,
   X,
   Eye,
-  EyeOff
+  EyeOff,
+  RefreshCw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from 'next-themes';
@@ -36,6 +37,7 @@ export function PhotoUploader({ onUploadComplete, isProcessing }: PhotoUploaderP
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef2 = useRef<HTMLInputElement>(null);
+  const cameraFallbackRef = useRef<HTMLInputElement>(null);
   const { theme } = useTheme();
 
   const uploadToApi = async (file: File) => {
@@ -124,34 +126,106 @@ export function PhotoUploader({ onUploadComplete, isProcessing }: PhotoUploaderP
     if (file) handleFileUpload(file);
   };
 
-  const handleCameraCapture = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' } 
-      });
-      
-      const video = document.createElement('video');
-      video.srcObject = stream;
-      await video.play();
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
+  const [isCameraLoading, setIsCameraLoading] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isFlashing, setIsFlashing] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth || 1280;
-      canvas.height = video.videoHeight || 720;
-      const ctx = canvas.getContext('2d');
-      ctx?.drawImage(video, 0, 0);
-
-      stream.getTracks().forEach(track => track.stop());
-
-      canvas.toBlob((blob) => {
-        if (blob) {
-          const file = new File([blob], 'camera-capture.jpg', { type: 'image/jpeg' });
-          handleFileUpload(file);
-        }
-      }, 'image/jpeg', 0.8);
-    } catch (error) {
-      console.error('Camera error:', error);
-      setError('Unable to access camera. Please check permissions.');
+  const stopCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((track) => track.stop());
+      setCameraStream(null);
     }
+  };
+
+  const openCamera = async (mode: 'environment' | 'user' = facingMode) => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      // Fallback to native mobile camera if WebRTC is blocked (e.g. non-HTTPS local network)
+      if (cameraFallbackRef.current) {
+        cameraFallbackRef.current.click();
+      } else {
+        setCameraError('Camera access is blocked by your browser. Try using HTTPS or localhost.');
+      }
+      return;
+    }
+
+    stopCamera();
+    setIsCameraOpen(true);
+    setIsCameraLoading(true);
+    setCameraError(null);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: mode, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      });
+      setCameraStream(stream);
+    } catch (err: any) {
+      console.error('Camera access error:', err);
+      setCameraError('Unable to access camera. Please check permissions or try another device.');
+    } finally {
+      setIsCameraLoading(false);
+    }
+  };
+
+  const closeCamera = () => {
+    stopCamera();
+    setIsCameraOpen(false);
+    setCameraError(null);
+  };
+
+  const toggleCameraFacing = () => {
+    const nextMode = facingMode === 'environment' ? 'user' : 'environment';
+    setFacingMode(nextMode);
+    openCamera(nextMode);
+  };
+
+  useEffect(() => {
+    if (isCameraOpen && cameraStream && videoRef.current) {
+      videoRef.current.srcObject = cameraStream;
+      videoRef.current.play().catch((err) => console.error('Video play error:', err));
+    }
+  }, [isCameraOpen, cameraStream]);
+
+  useEffect(() => {
+    return () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [cameraStream]);
+
+  const takeCameraSnapshot = () => {
+    if (!videoRef.current || !cameraStream) return;
+
+    setIsFlashing(true);
+    setTimeout(() => setIsFlashing(false), 200);
+
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 720;
+    const ctx = canvas.getContext('2d');
+
+    if (ctx) {
+      if (facingMode === 'user') {
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+      }
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    }
+
+    stopCamera();
+    setIsCameraOpen(false);
+
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const file = new File([blob], 'camera-capture.jpg', { type: 'image/jpeg' });
+        uploadToApi(file);
+      }
+    }, 'image/jpeg', 0.85);
   };
 
   const clearPreview = () => {
@@ -210,6 +284,14 @@ export function PhotoUploader({ onUploadComplete, isProcessing }: PhotoUploaderP
           ref={fileInputRef2}
           type="file"
           accept="image/*"
+          onChange={handleFileInput}
+          className="hidden"
+        />
+        <input
+          ref={cameraFallbackRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
           onChange={handleFileInput}
           className="hidden"
         />
@@ -294,8 +376,8 @@ export function PhotoUploader({ onUploadComplete, isProcessing }: PhotoUploaderP
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={handleCameraCapture}
-                  className="px-4 py-2 rounded-xl border-2 border-border bg-card text-foreground text-sm font-medium hover:bg-accent transition-colors flex items-center gap-2"
+                  onClick={() => openCamera('environment')}
+                  className="px-4 py-2 rounded-xl border-2 border-border bg-card text-foreground text-sm font-medium hover:bg-accent transition-colors flex items-center gap-2 cursor-pointer"
                   disabled={isLoading}
                 >
                   <Camera className="w-4 h-4" />
@@ -346,6 +428,134 @@ export function PhotoUploader({ onUploadComplete, isProcessing }: PhotoUploaderP
           </motion.div>
         ))}
       </div>
+
+      {/* Live Camera Viewfinder Modal */}
+      <AnimatePresence>
+        {isCameraOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="relative w-full max-w-lg bg-gray-900 border border-gray-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col text-white"
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-4 border-b border-gray-800 bg-gray-950/80">
+                <div className="flex items-center gap-2">
+                  <Camera className="w-5 h-5 text-amber-500" />
+                  <h3 className="font-semibold text-sm sm:text-base text-gray-100">Camera Viewfinder</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeCamera}
+                  className="p-1.5 rounded-full hover:bg-gray-800 text-gray-400 hover:text-white transition-colors cursor-pointer"
+                  title="Close Camera"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Viewport */}
+              <div className="relative aspect-[4/3] bg-black flex items-center justify-center overflow-hidden">
+                {isFlashing && (
+                  <div className="absolute inset-0 bg-white z-20 transition-opacity duration-150" />
+                )}
+
+                {isCameraLoading ? (
+                  <div className="flex flex-col items-center gap-3 text-amber-400">
+                    <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+                    <p className="text-sm font-medium text-gray-300">Starting camera stream...</p>
+                  </div>
+                ) : cameraError ? (
+                  <div className="p-6 text-center space-y-3">
+                    <XCircle className="w-10 h-10 text-red-500 mx-auto" />
+                    <p className="text-sm text-gray-300">{cameraError}</p>
+                    <button
+                      type="button"
+                      onClick={() => openCamera(facingMode)}
+                      className="px-4 py-2 bg-amber-600 hover:bg-amber-700 rounded-xl text-xs font-semibold text-white transition-colors cursor-pointer"
+                    >
+                      Try Again
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className={cn(
+                        "w-full h-full object-cover",
+                        facingMode === 'user' && "scale-x-[-1]"
+                      )}
+                    />
+                    
+                    {/* Corner Guides Overlay */}
+                    <div className="absolute inset-6 border-2 border-dashed border-white/40 rounded-2xl pointer-events-none flex flex-col justify-between p-4">
+                      <div className="flex justify-between">
+                        <div className="w-6 h-6 border-t-2 border-l-2 border-amber-400 -mt-1 -ml-1 rounded-tl-lg" />
+                        <div className="w-6 h-6 border-t-2 border-r-2 border-amber-400 -mt-1 -mr-1 rounded-tr-lg" />
+                      </div>
+                      <div className="text-center text-xs font-medium text-white/90 bg-black/60 backdrop-blur-sm py-1.5 px-3 rounded-full self-center border border-white/10 shadow-lg">
+                        Position your homework in frame
+                      </div>
+                      <div className="flex justify-between">
+                        <div className="w-6 h-6 border-b-2 border-l-2 border-amber-400 -mb-1 -ml-1 rounded-bl-lg" />
+                        <div className="w-6 h-6 border-b-2 border-r-2 border-amber-400 -mb-1 -mr-1 rounded-br-lg" />
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Modal Controls */}
+              <div className="p-4 bg-gray-950/90 border-t border-gray-800 flex items-center justify-around">
+                <button
+                  type="button"
+                  onClick={closeCamera}
+                  className="px-4 py-2 rounded-xl text-xs font-medium text-gray-400 hover:text-white hover:bg-gray-800 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+
+                {/* Shutter Button */}
+                <motion.button
+                  whileHover={{ scale: 1.08 }}
+                  whileTap={{ scale: 0.92 }}
+                  onClick={takeCameraSnapshot}
+                  disabled={isCameraLoading || !!cameraError}
+                  className={cn(
+                    "relative group p-1.5 rounded-full border-4 border-amber-500/50 hover:border-amber-400 transition-all shadow-xl shadow-amber-500/20 cursor-pointer",
+                    (isCameraLoading || !!cameraError) && "opacity-50 pointer-events-none"
+                  )}
+                  title="Capture photo"
+                >
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-amber-500 group-hover:bg-amber-400 flex items-center justify-center transition-colors">
+                    <Camera className="w-6 h-6 text-gray-950" />
+                  </div>
+                </motion.button>
+
+                {/* Flip Camera Button */}
+                <button
+                  type="button"
+                  onClick={toggleCameraFacing}
+                  disabled={isCameraLoading || !!cameraError}
+                  className="p-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition-colors cursor-pointer"
+                  title="Switch camera mode"
+                >
+                  <RefreshCw className="w-5 h-5" />
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
