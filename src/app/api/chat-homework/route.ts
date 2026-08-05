@@ -77,8 +77,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
+    const apiKeys = [
+      process.env.GEMINI_API_KEY,
+      process.env.GEMINI_API_KEY_2,
+      process.env.GEMINI_API_KEY_3,
+      process.env.GEMINI_API_KEY_4,
+      process.env.GEMINI_API_KEY_5,
+    ].filter(Boolean) as string[];
+
+    if (apiKeys.length === 0) {
       return NextResponse.json(
         { error: 'No GEMINI_API_KEY found in .env.local' },
         { status: 500 }
@@ -127,50 +134,54 @@ export async function POST(request: Request) {
     let lastError = 'All Gemini models failed';
 
     for (const model of CHAT_MODELS) {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            systemInstruction: {
-              parts: [{ text: systemInstruction }],
-            },
-            contents,
-            generationConfig: {
-              temperature: 0.6,
-              maxOutputTokens: 2048,
-            },
-          }),
+      let modelUnavailable = false;
+
+      for (const apiKey of apiKeys) {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              systemInstruction: {
+                parts: [{ text: systemInstruction }],
+              },
+              contents,
+              generationConfig: {
+                temperature: 0.6,
+                maxOutputTokens: 2048,
+              },
+            }),
+          }
+        );
+
+        if (response.status === 429) {
+          lastError = 'Rate limited — please wait a moment and try again.';
+          continue;
         }
-      );
 
-      if (response.status === 429) {
-        lastError =
-          'Rate limited — please wait a moment and try again.';
-        continue;
+        if (response.status === 404 || response.status === 403) {
+          lastError = `Model ${model} is unavailable`;
+          modelUnavailable = true;
+          break;
+        }
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          lastError = `Gemini error (${response.status}): ${errorText.substring(0, 200)}`;
+          continue;
+        }
+
+        const data = await response.json();
+        const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+
+        if (!reply) {
+          lastError = `Model ${model} returned an empty response`;
+          continue;
+        }
+
+        return NextResponse.json({ reply });
       }
-
-      if (response.status === 404 || response.status === 403) {
-        lastError = `Model ${model} is unavailable`;
-        continue;
-      }
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        lastError = `Gemini error (${response.status}): ${errorText.substring(0, 200)}`;
-        continue;
-      }
-
-      const data = await response.json();
-      const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-
-      if (!reply) {
-        lastError = `Model ${model} returned an empty response`;
-        continue;
-      }
-
-      return NextResponse.json({ reply });
     }
 
     return NextResponse.json({ error: lastError }, { status: 503 });
