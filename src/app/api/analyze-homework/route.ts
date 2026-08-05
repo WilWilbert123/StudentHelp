@@ -95,8 +95,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No image URL provided' }, { status: 400 });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
+    const apiKeys = [
+      process.env.GEMINI_API_KEY,
+      process.env.GEMINI_API_KEY_2,
+      process.env.GEMINI_API_KEY_3,
+      process.env.GEMINI_API_KEY_4,
+      process.env.GEMINI_API_KEY_5,
+    ].filter(Boolean) as string[];
+
+    if (apiKeys.length === 0) {
       return NextResponse.json(
         { error: 'No GEMINI_API_KEY found in .env.local' },
         { status: 500 }
@@ -116,52 +123,56 @@ export async function POST(request: Request) {
     let sawRateLimit = false;
 
     for (const [index, model] of GEMINI_MODELS.entries()) {
-      try {
-        console.log(`[Analyze] Trying Gemini model: ${model}`);
+      let modelUnavailable = false;
 
-        if (index > 0) {
-          const delayMs = sawRateLimit ? 5000 : 2000;
-          console.log(`[Analyze] Waiting ${delayMs / 1000}s before trying ${model}...`);
-          await sleep(delayMs);
-        }
+      if (index > 0) {
+        const delayMs = sawRateLimit ? 2000 : 1000;
+        console.log(`[Analyze] Waiting ${delayMs / 1000}s before trying next model: ${model}...`);
+        await sleep(delayMs);
+      }
 
-        const result = await callGeminiModel(model, apiKey, base64Image, mimeType);
+      for (const [keyIndex, apiKey] of apiKeys.entries()) {
+        try {
+          console.log(`[Analyze] Trying Gemini model: ${model} with key ${keyIndex + 1}/${apiKeys.length}`);
 
-        if (!result.ok) {
-          lastError = result.error;
+          const result = await callGeminiModel(model, apiKey, base64Image, mimeType);
 
-          if (result.status === 429) {
-            sawRateLimit = true;
-            lastError =
-              'Rate limited (429) — free tier quota may be hit. Try again later or upgrade at https://ai.google.dev/pricing';
-            console.log(`[Gemini] ${model}: 429, trying next model...`);
+          if (!result.ok) {
+            lastError = result.error;
+
+            if (result.status === 429) {
+              sawRateLimit = true;
+              lastError = 'Rate limited (429) — free tier quota may be hit. Try again later or upgrade at https://ai.google.dev/pricing';
+              console.log(`[Gemini] ${model} (key ${keyIndex + 1}): 429, trying next key...`);
+              continue;
+            }
+
+            if (result.status === 404 || result.status === 403) {
+              console.log(`[Gemini] ${model} (key ${keyIndex + 1}): ${result.status}, trying next model...`);
+              modelUnavailable = true;
+              break;
+            }
+
+            console.log(`[Gemini] ${model} (key ${keyIndex + 1}) failed: ${result.error}`);
             continue;
           }
 
-          if (result.status === 404 || result.status === 403) {
-            console.log(`[Gemini] ${model}: ${result.status}, trying next...`);
-            continue;
+          const tutorResponse = normalizeTutorResponse(result.parsed);
+          const analysis = transformTutorResponse(tutorResponse);
+
+          if (!analysis.canSolve) {
+            return NextResponse.json(analysis);
           }
 
-          console.log(`[Gemini] ${model} failed: ${result.error}`);
-          continue;
-        }
+          if (!analysis.solution) {
+            throw new Error('Solvable response missing solution payload');
+          }
 
-        const tutorResponse = normalizeTutorResponse(result.parsed);
-        const analysis = transformTutorResponse(tutorResponse);
-
-        if (!analysis.canSolve) {
           return NextResponse.json(analysis);
+        } catch (err) {
+          lastError = err instanceof Error ? err.message : 'Unknown model error';
+          console.log(`[Gemini] ${model} (key ${keyIndex + 1}) failed: ${lastError}`);
         }
-
-        if (!analysis.solution) {
-          throw new Error('Solvable response missing solution payload');
-        }
-
-        return NextResponse.json(analysis);
-      } catch (err) {
-        lastError = err instanceof Error ? err.message : 'Unknown model error';
-        console.log(`[Gemini] ${model} failed: ${lastError}`);
       }
     }
 
