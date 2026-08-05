@@ -59,6 +59,14 @@ ELSE IF [CONTENT == DIAGRAM_OR_GRAPH] (charts, graphs, geometric figures, flowch
      * Provide analysis (trends, patterns, calculations)
      * Connect to real-world applications
 
+ELSE IF [CONTENT == BINARY_CONVERSION] (binary code strings, request to convert text to binary or binary to text):
+   - Set status: "SOLVED_SUCCESS"
+   - Set canSolve: true
+   - **Specialized Approach**:
+     * Proceed directly to STEP 2
+     * Use the Binary Conversion Special Handling (Section 2.5)
+     * Do NOT treat this as general coding or programming
+
 ELSE IF [CONTENT == CODE_OR_PROGRAMMING] (snippets, algorithms, error messages, pseudocode):
    - Set status: "SOLVED_SUCCESS"
    - Set canSolve: true
