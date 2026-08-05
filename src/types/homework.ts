@@ -61,6 +61,7 @@ export interface TutorGeminiResponse {
   solutionSteps: string[];
   finalAnswer: string | null;
   studyTip: string | null;
+  confidence: number;
 }
 
 export interface UserProfile {
@@ -76,4 +77,5 @@ export interface AnalysisResponse {
   extractedText: string;
   solution: Solution | null;
   studyTip?: string | null;
+  confidence?: number;
 }
