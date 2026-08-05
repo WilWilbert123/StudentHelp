@@ -207,6 +207,7 @@ export function transformTutorResponse(raw: TutorGeminiResponse): AnalysisRespon
       extractedText: raw.identifiedProblem ?? '',
       solution: null,
       studyTip: null,
+      confidence: raw.confidence,
     };
   }
 
@@ -232,6 +233,7 @@ export function transformTutorResponse(raw: TutorGeminiResponse): AnalysisRespon
     extractedText: identifiedProblem,
     solution,
     studyTip: raw.studyTip ?? null,
+    confidence: raw.confidence,
   };
 }
 
@@ -260,5 +262,6 @@ export function normalizeTutorResponse(parsed: unknown): TutorGeminiResponse {
       : [],
     finalAnswer: data.finalAnswer == null ? null : String(data.finalAnswer),
     studyTip: data.studyTip == null ? null : String(data.studyTip),
+    confidence: typeof data.confidence === 'number' ? data.confidence : 1.0,
   };
 }
