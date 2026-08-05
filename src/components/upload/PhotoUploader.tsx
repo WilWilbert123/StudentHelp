@@ -642,7 +642,7 @@ function ChatMessageContent({ content, isDark }: { content: string; isDark: bool
 }
 
 const INITIAL_GREETING =
-  "👋 Hello! I'm your AI homework assistant. Upload a homework image on the left, then ask me anything about it — I'll explain steps, clarify concepts, and help you learn.";
+  "👋 Hello! I'm your AI homework assistant. You can upload a homework image on the left, or just type your question directly below — I'll explain steps, clarify concepts, and help you learn.";
 
 const CONNECTED_GREETING =
   "📎 I'm connected to your uploaded homework image. Ask me about any step, concept, or part of the problem you don't understand!";
@@ -753,19 +753,6 @@ export function AIAssistant({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
-
-    if (!imageUrl) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          type: 'assistant',
-          content: 'Please upload your homework image first so I can see the problem and help you accurately.',
-          timestamp: new Date(),
-        },
-      ]);
-      return;
-    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
