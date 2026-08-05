@@ -14,13 +14,17 @@ interface ChatHistoryMessage {
   content: string;
 }
 
-function buildSystemInstruction(context?: HomeworkChatContext | null): string {
+function buildSystemInstruction(context?: HomeworkChatContext | null, hasImage?: boolean): string {
   const lines = [
-    'You are a friendly AI homework tutor helping a student understand their uploaded assignment.',
-    'The student can see their homework image on screen — refer to it when helpful.',
-    'Guide them step by step. Explain concepts clearly and use age-appropriate language.',
-    'Do not simply dump the full answer unless they ask for it directly.',
+    'You are a friendly AI homework tutor helping a student understand their assignment.',
   ];
+
+  if (hasImage) {
+    lines.push('The student can see their homework image on screen — refer to it when helpful.');
+  }
+
+  lines.push('Guide them step by step. Explain concepts clearly and use age-appropriate language.');
+  lines.push('Do not simply dump the full answer unless they ask for it directly.');
 
   if (context?.subject) {
     lines.push(`Subject: ${context.subject}`);
@@ -38,9 +42,11 @@ function buildSystemInstruction(context?: HomeworkChatContext | null): string {
     lines.push(`Study tip: ${context.studyTip}`);
   }
 
-  lines.push(
-    'Use the attached homework image together with this context when answering follow-up questions.'
-  );
+  if (hasImage) {
+    lines.push(
+      'Use the attached homework image together with this context when answering follow-up questions.'
+    );
+  }
 
   return lines.join('\n');
 }
@@ -71,13 +77,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 });
     }
 
-    if (!imageUrl) {
-      return NextResponse.json(
-        { error: 'Upload a homework image first, then ask your question.' },
-        { status: 400 }
-      );
-    }
-
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
@@ -86,8 +85,16 @@ export async function POST(request: Request) {
       );
     }
 
-    const { base64Image, mimeType } = await fetchImageAsBase64(imageUrl);
-    const systemInstruction = buildSystemInstruction(context);
+    let base64Image = null;
+    let mimeType = null;
+    
+    if (imageUrl) {
+      const imageData = await fetchImageAsBase64(imageUrl);
+      base64Image = imageData.base64Image;
+      mimeType = imageData.mimeType;
+    }
+
+    const systemInstruction = buildSystemInstruction(context, !!imageUrl);
     const priorMessages = Array.isArray(history)
       ? history.filter(
           (entry) =>
@@ -98,19 +105,22 @@ export async function POST(request: Request) {
         )
       : [];
 
+    const userParts: any[] = [];
+    if (base64Image && mimeType) {
+      userParts.push({
+        inline_data: {
+          mime_type: mimeType,
+          data: base64Image,
+        },
+      });
+    }
+    userParts.push({ text: message.trim() });
+
     const contents = [
       ...mapHistoryToGeminiContents(priorMessages),
       {
         role: 'user',
-        parts: [
-          {
-            inline_data: {
-              mime_type: mimeType,
-              data: base64Image,
-            },
-          },
-          { text: message.trim() },
-        ],
+        parts: userParts,
       },
     ];
 

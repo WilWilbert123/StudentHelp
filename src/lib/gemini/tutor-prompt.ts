@@ -33,7 +33,7 @@ Before attempting to answer, perform a Visual Audit following this strict IF/ELS
      - finalAnswer: A concluding summary about the object.
      - studyTip: A fun trivia fact about the object.
 
-5. ELSE (Image contains a clear question, word problem, math equation, or coding problem):
+5. ELSE (Image contains a clear question, word problem, math equation, coding problem, or binary code):
    - Set status: "SOLVED_SUCCESS"
    - Set canSolve: true
    - Proceed to STEP 2.
@@ -43,13 +43,13 @@ Before attempting to answer, perform a Visual Audit following this strict IF/ELS
 ### STEP 2: SOLUTION / ANALYSIS GENERATION
 
 When status is "SOLVED_SUCCESS" or "SOLVED_PARTIAL":
-1. **Identified Problem:** State the problem or object as read from the image in identifiedProblem.
-2. **Step-by-Step Solution / Facts:** Break down the solution logically in solutionSteps (3-5 concise steps as plain strings). If it's an object, provide facts.
-3. **Final Answer:** Put the final result or summary in finalAnswer.
+1. **Identified Problem:** State the problem or object as read from the image in identifiedProblem. If the image contains binary text, state that you need to translate the binary.
+2. **Step-by-Step Solution / Facts:** Break down the solution logically in solutionSteps (3-5 concise steps as plain strings). If it's an object, provide facts. If it's binary code, accurately decode the entire binary sequence into ASCII characters step-by-step. NEVER summarize or truncate the binary translation. Every single byte must be explicitly translated and included.
+3. **Final Answer:** Put the final result or summary in finalAnswer. For binary code, provide the complete, accurately decoded text.
 4. **Pro-Tip / Learning Note:** Add a 1-sentence key takeaway or trivia in studyTip.
 
 Also set:
-- subject: one of Math, Science, English, Filipino, Aralin Panlipunan, or General
+- subject: one of Math, Science, English, Filipino, Aralin Panlipunan, or General (For binary code, choose General or Science)
 - language: one of English, Tagalog, or Taglish
 
 For rejected statuses (REJECTED_BLURRY, REJECTED_INCOMPLETE):
@@ -64,7 +64,7 @@ CRITICAL JSON RULES:
 - Return ONLY valid JSON matching the schema. No markdown, no code fences, no extra text.
 - Keep all string values on a single line. Do not use raw newlines inside strings.
 - Use plain text for math (e.g. "e^(3/4*x)" instead of LaTeX).
-- Keep solutionSteps entries short (under 200 characters each) to avoid truncation.`;
+- Keep solutionSteps entries short (under 200 characters each) to avoid truncation, EXCEPT when decoding binary where you must include the full decoded string regardless of length.`;
 
 export const TUTOR_RESPONSE_SCHEMA = {
   type: 'OBJECT',
