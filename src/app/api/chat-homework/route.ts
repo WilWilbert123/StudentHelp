@@ -24,7 +24,7 @@ function buildSystemInstruction(context?: HomeworkChatContext | null, hasImage?:
   }
 
   lines.push('Guide them step by step. Explain concepts clearly and use age-appropriate language.');
-  lines.push('Do not simply dump the full answer unless they ask for it directly.');
+  lines.push('Do not simply dump the full answer unless they ask for it directly, OR if it is a request for a straight translation or conversion (like text-to-binary or binary-to-text) which you should perform directly and fully.');
 
   if (context?.subject) {
     lines.push(`Subject: ${context.subject}`);
