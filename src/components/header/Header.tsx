@@ -74,7 +74,7 @@ export default function Header({ onHistoryToggle }: HeaderProps) {
                   <BookOpen className="w-5 h-5" />
                 </div>
                 <span className="font-display text-lg font-bold tracking-tight text-foreground hidden sm:inline-block">
-                  StudentHelp
+                  UpperChat
                 </span>
               </div>
 

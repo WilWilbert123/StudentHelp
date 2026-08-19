@@ -6,14 +6,14 @@ export async function GET(request: Request) {
     const increment = url.searchParams.get('inc') === 'true';
 
     const endpoint = increment
-      ? 'https://api.counterapi.dev/v1/studenthelp-john-wilbert-gamis/views/up'
-      : 'https://api.counterapi.dev/v1/studenthelp-john-wilbert-gamis/views/';
+      ? 'https://api.counterapi.dev/v1/upperchat-john-wilbert-gamis/views/up'
+      : 'https://api.counterapi.dev/v1/upperchat-john-wilbert-gamis/views/';
 
     const res = await fetch(endpoint, { cache: 'no-store' });
     
     if (!res.ok) {
       // Fallback endpoint if needed
-      const fallbackRes = await fetch('https://api.counterapi.dev/v1/studenthelp-john-wilbert-gamis/views/up', { cache: 'no-store' });
+      const fallbackRes = await fetch('https://api.counterapi.dev/v1/upperchat-john-wilbert-gamis/views/up', { cache: 'no-store' });
       const fallbackData = await fallbackRes.json();
       return NextResponse.json({ count: fallbackData.count ?? 1 });
     }
