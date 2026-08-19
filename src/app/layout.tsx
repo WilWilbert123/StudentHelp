@@ -11,7 +11,7 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: 'StudentHelp - Your AI Homework Assistant',
+  title: 'UpperChat - Your AI Homework Assistant',
   description: 'Get instant help with your homework using AI',
 };
 

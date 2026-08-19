@@ -91,7 +91,7 @@ export default function NameModal({ isOpen, initialName = '', onClose }: NameMod
                 <Sparkles className="h-6 w-6" />
               </div>
               <h2 id="modal-title" className="font-display text-2xl font-bold tracking-tight text-foreground">
-                {initialName ? 'Update Your Profile' : 'Welcome to StudentHelp 👋'}
+                {initialName ? 'Update Your Profile' : 'Welcome to UpperChat 👋'}
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 {initialName
