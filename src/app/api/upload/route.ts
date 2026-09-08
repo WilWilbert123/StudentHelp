@@ -77,8 +77,11 @@ export async function POST(request: Request) {
       const errorText = await uploadResponse.text();
       console.error(`[Upload API] Upload failed with status ${uploadResponse.status}:`, errorText);
 
-      // If 404/ bucket not found, try creating the bucket
-      if (uploadResponse.status === 404) {
+      // If 404 or 400 with NoSuchBucket / Bucket not found, try creating the bucket
+      const isBucketNotFound = uploadResponse.status === 404 || 
+        (uploadResponse.status === 400 && (errorText.includes('Bucket not found') || errorText.includes('NoSuchBucket')));
+
+      if (isBucketNotFound) {
         console.log(`[Upload API] Bucket "${bucketName}" not found, creating...`);
 
         // Try to create the bucket via REST API
